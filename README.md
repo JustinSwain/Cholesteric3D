@@ -111,7 +111,7 @@ Tested on version 5.9.1
     Navigate to your data folder and click on Results_Paraview_..vtu.
   </li>
   <li>
-    Click "Apply" in the right-side properties browser.
+    Click "Apply" in the left-side properties browser.
   </li>
   <li>
     In the top menu bar, find Filters>Alphabetical>Cell Data to Point Data. Click "Apply."
