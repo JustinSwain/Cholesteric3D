@@ -79,7 +79,7 @@ Tested on version 5.9.1
 </li>
 
 <li>
-  Run Cholesteric3D.edp and wait until it finishes (about 26 hours for this simulation on our computer). The simulation data is saved in the data directory and the energy data is saved as a MATLAB script file in energyData.m.
+  Run Cholesteric3D.edp and wait until it finishes (about 26 hours for this simulation on our computer with and Intel Xeon 10-core cpu). The simulation data is saved in the data directory and the energy data is saved as a MATLAB script file in energyData.m.
 </li>
 
 <li>
