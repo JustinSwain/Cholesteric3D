@@ -4,7 +4,7 @@
   This software is used to simulate choelsteric liquid crystals in three dimensions using a Q-tensor model by way of a Finite Element method. The Finite Element problem is solved using FreeFEM++. Data is processed using MATLAB and Python. Data is visualized using ParaView.
 </p>
 <p>
-  This code accompanies the paper "Directed Self-Assembly of Chiral Liquid Crystals into Biomimetic Bouligand Structures in Thin Film with Superior Optical-Mechanical Properties" by Tejal Pawale1, Justin Swain, Mesonma Anwasi1, David A. Czaplewski, Ralu Nana Silvia Divan, Giordano Tierra Chica, and Xiao Li. This software was developed by Justin Swain and Giordano Tierra Chica and released as open source under the MIT license.
+  This code accompanies the paper "Directed Self-Assembly of Chiral Liquid Crystals into Biomimetic Bouligand Structures in Thin Film with Superior Optical-Mechanical Properties" by Tejal Pawale, Justin Swain, Mesonma Anwasi, David A. Czaplewski, Ralu Nana Silvia Divan, Giordano Tierra Chica, and Xiao Li. This software was developed by Justin Swain and Giordano Tierra Chica and released as open source under the MIT license.
 </p>
 
 <h2>Repository Contents</h2>
@@ -94,9 +94,36 @@ Tested on version 5.9.1
 <li>
   Run loaddata.edp to convert the data to .vtu files which can be read by Paraview. The program will run until it has processed all of the available data files inside of the data folder.
 </li>
+</ol>
 
-<li>
-  Open the .vtu files in ParaView to view the simulation data. Run the energyData.m script in MATLAB to view the energy data.
-</li>
+<h2>Expected Output</h2>
+<p>
+  After running the code and processing the data, we can now open the data in ParaView to reproduce a portion of a figure from the article and recover a liquid crystal helical structure.
+</p>
+<ol>
+  <li>
+    Open ParaView
+  </li>
+  <li>
+    Click File>Open...
+  </li>
+  <li>
+    Navigate to your data folder and click on Results_Paraview_..vtu.
+  </li>
+  <li>
+    Click "Apply" in the right-side properties browser.
+  </li>
+  <li>
+    In the top menu bar, find Filters>Alphabetical>Cell Data to Point Data. Click "Apply."
+  </li>
+  <li>
+    Now select Filters>Alphabetical>Contour. In the properties browser, choose "normQ2" in the drop down menu next to "Contour by:". In the "Value Range:" box, click on the value and type 0.25. Click "Apply."
+  </li>
+  <li>
+    To apply color to the surface, locate the drop-down selction under the red undo button (beneath Tools) and select "S2."
+  </li>
+  <li>
+    Advance the simulation to the final time by clicking the green triangle "Play" button.
+  </li>
 </ol>
 
