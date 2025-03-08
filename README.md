@@ -48,6 +48,12 @@ https://www.python.org/<br>
 (free and open-source)<br>
 Tested on version 3.13.2
 </li>
+<ul>
+  <li>
+    Numpy:<br>
+    https://numpy.org/install/
+  </li>
+</ul>
 
 <li>
 MATLAB:<br>
