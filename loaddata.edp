@@ -1,0 +1,153 @@
+// Cholesteric 3D
+// Copyright (c) 2025 Justin Swain and Giordano Tierra Chica
+// Licensed under the MIT License (see LICENSE file)
+// 
+//  This code supports the research in "Directed Self-Assembly of Chiral Liquid Crystals into Biomimetic 
+//  Bouligand Structures in Thin Film with Superior Optical-Mechanical Properties" by Tejal Pawale1, Justin Swain, 
+//  Mesonma Anwasi1, David A. Czaplewski, Ralu Nana Silvia Divan, Giordano Tierra Chica, and Xiao Li
+
+load "iovtk"; // for saving data in paraview format
+load "msh3"
+load "medit"
+verbosity=0;
+real wdate=1;
+string foldername = "data";
+
+int start = 1;
+int step = 20;
+
+// 1 unit = 100nm or 0.1um
+real x0 = -1.0, x1 = 1.0;
+real y0 = -3.0, y1 = 3.0;
+real z0 = 0.0, z1 = 2.0;
+real [int,int] BB=[[x0,x1],[y0,y1],[z0,z1]];
+int [int,int] L=[[1,2],[3,4],[5,6]];
+include "Cube.idp" int[int] NN=[20,60,20];	//	the number of steps in each direction
+mesh3 Thm=Cube(NN,BB,L);
+mesh3 Th=movemesh(Thm,[x/sqrt(2.0) + y/sqrt(2.0),-x/sqrt(2.0) + y/sqrt(2.0),z]);
+
+//-----------------------------------------------------------------------------------------
+// Set Finite Element Spaces
+//-----------------------------------------------------------------------------------------
+
+fespace Xh(Th,P1,periodic=[[1,y+x,z],[2,y+x,z],[3,y-x,z],[4,y-x,z]]); //define a Finite Element space
+Xh q1,q2,q3,q4,q5,q6; //Q-Tensor
+Xh d1,d2,d3,eigen; //eigenvector and eigenvalues
+Xh Splot,S2plot,Q2plot; //plot parameters
+
+int i, jj;
+jj = 0;
+cout << jj << endl;
+{
+ifstream ff(foldername+ "/" + "q1_"+jj+".gp");
+ff>>q1[];
+}
+{
+ifstream ff(foldername+ "/" + "q2_"+jj+".gp");
+ff>>q2[];
+}
+{
+ifstream ff(foldername+ "/" + "q3_"+jj+".gp");
+ff>>q3[];
+}
+{
+ifstream ff(foldername+ "/" + "q4_"+jj+".gp");
+ff>>q4[];
+}
+{
+ifstream ff(foldername+ "/" + "q5_"+jj+".gp");
+ff>>q5[];
+}
+{
+ifstream ff(foldername+ "/" + "q6_"+jj+".gp");
+ff>>q6[];
+}
+{
+ifstream ff(foldername+ "/" + "S_"+jj+".gp");
+ff>>Splot[];
+}
+{
+ifstream ff(foldername+ "/" + "S2_"+jj+".gp");
+ff>>S2plot[];
+}
+{
+ifstream ff(foldername+ "/" + "NormQ2_"+jj+".gp");
+ff>>Q2plot[];
+}
+{
+ifstream ff(foldername+ "/" + "eigenvector1_"+jj+".gp");
+ff>>d1[];
+}
+{
+ifstream ff(foldername+ "/" + "eigenvector2_"+jj+".gp");
+ff>>d2[];
+}
+{
+ifstream ff(foldername+ "/" + "eigenvector3_"+jj+".gp");
+ff>>d3[];
+}
+{
+ifstream ff(foldername+ "/" + "eigen_"+jj+".gp");
+ff>>eigen[];
+}
+
+savevtk(foldername+ "/" + "Results_Paraview_"+jj+".vtu",Th,[d1,d2,d3],eigen,Splot,S2plot,Q2plot,dataname="eigenvector eigenvalue S S2 normQ2");
+
+for (i=0;i<=1000;i++){
+jj = start + step*i;
+cout << jj << endl;
+{
+ifstream ff(foldername+ "/" + "q1_"+jj+".gp");
+ff>>q1[];
+}
+{
+ifstream ff(foldername+ "/" + "q2_"+jj+".gp");
+ff>>q2[];
+}
+{
+ifstream ff(foldername+ "/" + "q3_"+jj+".gp");
+ff>>q3[];
+}
+{
+ifstream ff(foldername+ "/" + "q4_"+jj+".gp");
+ff>>q4[];
+}
+{
+ifstream ff(foldername+ "/" + "q5_"+jj+".gp");
+ff>>q5[];
+}
+{
+ifstream ff(foldername+ "/" + "q6_"+jj+".gp");
+ff>>q6[];
+}
+{
+ifstream ff(foldername+ "/" + "S_"+jj+".gp");
+ff>>Splot[];
+}
+{
+ifstream ff(foldername+ "/" + "S2_"+jj+".gp");
+ff>>S2plot[];
+}
+{
+ifstream ff(foldername+ "/" + "NormQ2_"+jj+".gp");
+ff>>Q2plot[];
+}
+{
+ifstream ff(foldername+ "/" + "eigenvector1_"+jj+".gp");
+ff>>d1[];
+}
+{
+ifstream ff(foldername+ "/" + "eigenvector2_"+jj+".gp");
+ff>>d2[];
+}
+{
+ifstream ff(foldername+ "/" + "eigenvector3_"+jj+".gp");
+ff>>d3[];
+}
+{
+ifstream ff(foldername+ "/" + "eigen_"+jj+".gp");
+ff>>eigen[];
+}
+
+savevtk(foldername+ "/" + "Results_Paraview_"+jj+".vtu",Th,[d1,d2,d3],eigen,Splot,S2plot,Q2plot,dataname="eigenvector eigenvalue S S2 normQ2");
+}

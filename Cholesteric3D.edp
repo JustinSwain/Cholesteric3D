@@ -1,0 +1,620 @@
+// Cholesteric 3D
+// Copyright (c) 2025 Justin Swain and Giordano Tierra Chica
+// Licensed under the MIT License (see LICENSE file)
+// 
+//  This code supports the research in "Directed Self-Assembly of Chiral Liquid Crystals into Biomimetic 
+//  Bouligand Structures in Thin Film with Superior Optical-Mechanical Properties" by Tejal Pawale1, Justin Swain, 
+//  Mesonma Anwasi1, David A. Czaplewski, Ralu Nana Silvia Divan, Giordano Tierra Chica, and Xiao Li
+
+load "iovtk"; // for saving data in paraview format
+load "msh3"
+load "medit"
+verbosity=0;
+real wdate=1;
+string foldername = "data";
+string filename="energyData.m"; // for saving datat in matlab format
+exec("mkdir "+foldername);
+
+int meshsize  = 20;
+real dt=1.0e-4;
+int nTimestep = 100;
+real time=0.0, T=nTimestep*dt;
+int iterguarda = 5; // iterations between each save for paraview
+int iterdib = 1; // in which iteration start saving for paraview
+int saveFrame = 1;
+
+// 1 unit = 100nm or 0.1um
+real x0 = -1.0, x1 = 1.0;
+real y0 = -3.0, y1 = 3.0;
+real z0 = 0.0, z1 = 2.0;
+real [int,int] BB=[[x0,x1],[y0,y1],[z0,z1]];
+int [int,int] L=[[1,2],[3,4],[5,6]];
+include "Cube.idp" int[int] NN=[20,60,20];	//	the number of steps in each direction
+mesh3 Thm=Cube(NN,BB,L);
+mesh3 Th=movemesh(Thm,[x/sqrt(2.0) + y/sqrt(2.0),-x/sqrt(2.0) + y/sqrt(2.0),z]);
+
+//-----------------------------------------------------------------------------------------
+// Set Finite Element Spaces
+//-----------------------------------------------------------------------------------------
+fespace Xh(Th,P1,periodic=[[1,y+x,z],[2,y+x,z],[3,y-x,z],[4,y-x,z]]); //define a Finite Element space
+Xh q1,q2,q3,q4,q5,q6; //Q-Tensor
+Xh q1l,q2l,q3l,q4l,q5l,q6l; //Q-Tensor
+Xh q01,q02,q03,q04,q05,q06; //initial conditions
+Xh qh1,qh2,qh3,qh4,qh5,qh6; //test function
+Xh dbb;
+
+//-----------------------------------------------------------------------------------------
+// Set Parameters
+//-----------------------------------------------------------------------------------------
+int i=0,jj=0,iter=0,Nsystem=0;
+real energy,energy0,energyl1,energyq0,energyl2,energyl3,energyPsi,trace;
+real error,errorq1,errorq2,errorq3,errorq4,errorq5,errorq6;
+real normq01,normq02,normq03,normq04,normq05,normq06;
+real a=-4.4835774, b=55.262698, c=45.096447; //thermotropic parameters
+real alpha=sqrt((b/c)^2. - 2.*a/c);
+real eta = 1.0/0.104269;
+real l1=1.0, l2=0.0, l3=0.0, parameterq0=20.0*pi/29.0; //elastic parameters
+real Tol=1.0e-4; //iterative algorithm tolerance
+//-----------------------------------------------------------------------------------------
+// Function Definitions
+//-----------------------------------------------------------------------------------------
+macro traceQ2(x1, x2, x3, x4, x5, x6) (x1*x1 + 2.*x2*x2 + 2.*x3*x3 + x4*x4 + 2.*x5*x5 + x6*x6) //
+macro traceQ3(x1,x2,x3,x4,x5,x6)(
+				   x1*(x1*x1 + x2*x2 + x3*x3) + 2.0*x2*(x1*x2 + x2*x4 + x3*x5) + 2.0*x3*(x1*x3 + x2*x5 + x3*x6)
+	       + x4*(x2*x2 + x4*x4 + x5*x5)	+ 2.0*x5*(x2*x3 + x4*x5 + x5*x6)
+				 + x6*(x3*x3 + x5*x5 + x6*x6) ) //
+
+macro PsiOne(x1, x2, x3, x4, x5, x6) (0.25*c*(traceQ2(x1,x2,x3,x4,x5,x6) - alpha*alpha)^2.0) //
+
+macro gradPsiOne(x1, x2, x3, x4, x5, x6) (traceQ2(x1,x2,x3,x4,x5,x6) - alpha*alpha) //
+
+//-----------------------------------------------------------------------------------------
+// Define Weak Formulation
+//-----------------------------------------------------------------------------------------
+problem LG1 ( [q1],[qh1], solver=GMRES )=
+	int3d(Th) (
+			(1.0/dt)*q1*qh1
+		+ l1*0.5*(dx(q1)*dx(qh1) + dy(q1)*dy(qh1) + dz(q1)*dz(qh1))
+		+ eta*c*0.5*((gradPsiOne(q01,q02,q03,q04,q05,q06) + 2.*q01^2.)*q1)*qh1 //psi one od2lt
+		+ eta*0.5*(a + c*alpha*alpha)*q1*qh1 //psi two
+		- eta*0.5*b*(2.*(q01))*q1*qh1 //psi three od2lt
+		+ eta*b*(1./3.)*0.5*(2.*q01)*q1*qh1 // trace part
+		)
+	+int3d(Th) (
+		- (1.0/dt)*q01*qh1
+		+ 0.5*l1*(dx(q01)*dx(qh1) + dy(q01)*dy(qh1) + dz(q01)*dz(qh1))
+		+ 0.5*l2*(dx(q1l) + dy(q2l) + dz(q3l))*dx(qh1)
+		+ 0.5*l2*(dx(q01) + dy(q02) + dz(q03))*dx(qh1)
+		+ 0.5*l3*(dx(q1l) + dx(q2l) + dx(q3l))*(dx(qh1) + dy(qh1) + dz(qh1))
+		+ 0.5*l3*(dx(q01) + dx(q02) + dx(q03))*(dx(qh1) + dy(qh1) + dz(qh1))
+		- 0.5*l1*4.0*parameterq0*(dz(q2l) - dy(q3l))*qh1
+		- 0.5*l1*4.0*parameterq0*(dz(q02) - dy(q03))*qh1
+		+ eta*c*(gradPsiOne(q01,q02,q03,q04,q05,q06)*q01)*qh1 //psi one
+		+ eta*c*0.5*(-1.*(gradPsiOne(q01,q02,q03,q04,q05,q06) + 2.*q01^2.)*q01)*qh1 //psi one od2lt
+		+ eta*0.5*(a + c*alpha*alpha)*q01*qh1 //psi two
+		- eta*b*(q01*q01 + q02*q02 + q03*q03)*qh1 //psi three
+		- eta*b*0.5*(-2.*(q01))*q01*qh1 //psi three od2lt
+		+ eta*b*(1./3.)*traceQ2(q01,q02,q03,q04,q05,q06)*qh1 //trace part
+		+ eta*b*(1./3.)*0.5*(-2.*q01)*q01*qh1 //trace part od2lt
+						)
++ on(5, q1 = -1./3. - 0.5*dbb) //Bottom boundary = 5
++ on(6, q1 = sin(pi/8.0)^2. - 1./3.) //Top boundary = 6
+;
+
+problem LG2 ( [q2],[qh2], solver=GMRES )=
+int3d(Th) (
+		(1.0/dt)*q2*qh2
+	+ l1*0.5*(dx(q2)*dx(qh2) + dy(q2)*dy(qh2) + dz(q2)*dz(qh2))
+	+ eta*c*0.5*(gradPsiOne(q01,q02,q03,q04,q05,q06) + 4.*q02^2.)*q2*qh2 //psi one od2lt
+	+ eta*0.5*(a + c*alpha*alpha)*q2*qh2 //psi two
+	- eta*b*0.5*((q01 + q04))*q2*qh2 //psi three od2lt
+	)
++int3d(Th) (
+	- (1.0/dt)*q02*qh2
+	+ 0.5*l1*(dx(q02)*dx(qh2) + dy(q02)*dy(qh2)+ dz(q02)*dz(qh2) )
+	+ 0.25*l2*(dx(q1l) + dy(q2l) + dz(q3l))*dy(qh2)
+	+ 0.25*l2*(dx(q01) + dy(q02) + dz(q03))*dy(qh2)
+	+ 0.25*l2*(dx(q2l) + dy(q4l) + dz(q5l))*dx(qh2)
+	+ 0.25*l2*(dx(q02) + dy(q04) + dz(q05))*dx(qh2)
+	+ 0.25*l3*(dy(q1l) + dy(q2l) + dy(q3l))*(dx(qh2) + dy(qh2) + dz(qh2))
+	+ 0.25*l3*(dy(q01) + dy(q02) + dy(q03))*(dx(qh2) + dy(qh2) + dz(qh2))
+	+ 0.25*l3*(dx(q2l) + dx(q4l) + dx(q5l))*(dx(qh2) + dy(qh2) + dz(qh2))
+	+ 0.25*l3*(dx(q02) + dx(q04) + dx(q05))*(dx(qh2) + dy(qh2) + dz(qh2))
+	- 0.25*l1*4.0*parameterq0*(dz(q4l) - dy(q5l) + dx(q3l) -dz(q1l))*qh2
+	- 0.25*l1*4.0*parameterq0*(dz(q04) - dy(q05) + dx(q03) -dz(q01))*qh2
+	+ eta*c*(gradPsiOne(q01,q02,q03,q04,q05,q06)*q02)*qh2 //psi one
+	+ eta*c*0.5*( 4.*q01*q02*(q1 - q01)
+						- (gradPsiOne(q01,q02,q03,q04,q05,q06) + 4.*q02^2.)*q02)*qh2 //psi one od2lt
+	+ eta*0.5*(a + c*alpha*alpha)*q02*qh2 //psi two
+	- eta*b*(q01*q02 + q02*q04 + q03*q05)*qh2 //psi three
+	- eta*b*0.5*( 2.*q02*(q1 - q01)
+						- (q01 + q04)*q02)*qh2 //psi three od2lt
+					)
++ on(5, q2 = -1.0*dbb)
++ on(6, q2 = 0.0)
+;
+
+problem LG3 ( [q3],[qh3], solver=GMRES )=
+int3d(Th) (
+	(1.0/dt)*q3*qh3
++ l1*0.5*(dx(q3)*dx(qh3) + dy(q3)*dy(qh3) + dz(q3)*dz(qh3) )
++ eta*c*0.5*((gradPsiOne(q01,q02,q03,q04,q05,q06) + 4.*q03^2.)*q3)*qh3 //psi one od2lt
++ eta*0.5*(a + c*alpha*alpha)*q3*qh3 //psi two
+- eta*b*0.5*((q01 + q06))*q3*qh3 //psi three od2lt
+)
++int3d(Th) (
+	- (1.0/dt)*q03*qh3
+	+ 0.5*l1*(dx(q03)*dx(qh3) + dy(q03)*dy(qh3) + dz(q03)*dz(qh3) )
+	+ 0.25*l2*(dx(q1l) + dy(q2l) + dz(q3l))*dz(qh3)
+	+ 0.25*l2*(dx(q01) + dy(q02) + dz(q03))*dz(qh3)
+	+ 0.25*l2*(dx(q3l) + dy(q5l) + dz(q6l))*dx(qh3)
+	+ 0.25*l2*(dx(q03) + dy(q05) + dz(q06))*dx(qh3)
+	+ 0.25*l3*(dz(q1l) + dz(q2l) + dz(q3l))*(dx(qh3) + dy(qh3) + dz(qh3))
+	+ 0.25*l3*(dz(q01) + dz(q02) + dz(q03))*(dx(qh3) + dy(qh3) + dz(qh3))
+	+ 0.25*l3*(dx(q3l) + dx(q5l) + dx(q6l))*(dx(qh3) + dy(qh3) + dz(qh3))
+	+ 0.25*l3*(dx(q03) + dx(q05) + dx(q06))*(dx(qh3) + dy(qh3) + dz(qh3))
+	- 0.25*l1*4.0*parameterq0*(dz(q5l) - dy(q6l) + dy(q1l) - dx(q2l))*qh3
+	- 0.25*l1*4.0*parameterq0*(dz(q05) - dy(q06) + dy(q01) - dx(q02))*qh3
+	+ eta*c*(gradPsiOne(q01,q02,q03,q04,q05,q06)*q03)*qh3
+	+ eta*c*0.5*( 4.*q01*q03*(q1 - q01)
+						+ 8.*q02*q03*(q2 - q02)
+						- (gradPsiOne(q01,q02,q03,q04,q05,q06) + 4.*q03^2.)*q03)*qh3 //psi one od2lt
+	+ eta*0.5*(a + c*alpha*alpha)*q03*qh3 //psi two
+	- eta*b*(q01*q03 + q02*q05 + q03*q06)*qh3
+	- eta*b*0.5*( 2.*q03*(q1 - q01)
+						+ 2.*q05*(q2 - q02)
+						- (q01 + q06)*q03)*qh3 //psi three od2lt
+	)
++ on(5, q3 = 0.0)
++ on(6, q3 = sin(pi/8.0)*cos(pi/8.0))
+;
+
+problem LG4 ( [q4],[qh4], solver=GMRES )=
+int3d(Th) (
+	(1.0/dt)*q4*qh4
++ l1*0.5*(dx(q4)*dx(qh4) + dy(q4)*dy(qh4) + dz(q4)*dz(qh4) )
++ eta*c*0.5*((gradPsiOne(q01,q02,q03,q04,q05,q06) + 2.*q04^2.)*q4)*qh4 //psi one od2lt
++ eta*0.5*(a + c*alpha*alpha)*q4*qh4 //psi two
+- eta*b*0.5*(2.*(q04)*q4)*qh4 //psi three od2lt
++ eta*b*0.5*(1./3.)*(2.*q04)*q4*qh4 //trace part od2lt
+)
++int3d(Th) (
+	- (1.0/dt)*q04*qh4
+	+ 0.5*l1*(dx(q04)*dx(qh4) + dy(q04)*dy(qh4) + dz(q04)*dz(qh4))
+	+ 0.5*l2*(dx(q2l) + dy(q4l) + dz(q5l))*dy(qh4)
+	+ 0.5*l2*(dx(q02) + dy(q04) + dz(q05))*dy(qh4)
+	+ 0.5*l3*(dy(q2l) + dy(q4l) + dy(q5l))*(dx(qh4) + dy(qh4) + dz(qh4))
+	+ 0.5*l3*(dy(q02) + dy(q04) + dy(q05))*(dx(qh4) + dy(qh4) + dz(qh4))
+	- 0.5*l1*4.0*parameterq0*(dx(q5l) - dz(q2l))*qh4
+	- 0.5*l1*4.0*parameterq0*(dx(q05) - dz(q02))*qh4
+	+ eta*c*(gradPsiOne(q01,q02,q03,q04,q05,q06)*q04 )*qh4 //psi one
+	+ eta*c*0.5*( 4.*q01*q04*(q1 - q01)
+						+ 8.*q02*q04*(q2 - q02)
+						+ 8.*q03*q04*(q3 - q03)
+						- (gradPsiOne(q01,q02,q03,q04,q05,q06) + 2.*q04^2.)*q04)*qh4 //psi one od2lt
+	+ eta*0.5*(a + c*alpha*alpha)*q04*qh4 //psi two
+	- eta*b*(q02*q02 + q04*q04 + q05*q05)*qh4 //psi three
+	- eta*b*0.5*(4.*q02*(q2 - q02)
+						- 2.*(q04)*q04)*qh4 //psi three od2lt
+	+ eta*b*(1./3.)*traceQ2(q01,q02,q03,q04,q05,q06)*qh4 //trace part
+	+ eta*b*(1./3.)*0.5*( 2.*q01*(q1 - q01)
+										+ 4.*q02*(q2 - q02)
+										+ 4.*q03*(q3 - q03)
+										- 2.*q04)*q04*qh4 //trace part od2lt
+	)
++ on(5, q4 = -1./3. + 0.5*dbb)
++ on(6, q4 = -1./3.)
+;
+
+problem LG5 ( [q5],[qh5], solver=GMRES )=
+int3d(Th) (
+	(1.0/dt)*q5*qh5
++ l1*0.5*(dx(q5)*dx(qh5) + dy(q5)*dy(qh5) + dz(q5)*dz(qh5))
++ eta*c*0.5*((gradPsiOne(q01,q02,q03,q04,q05,q06) + 4.*q05^2.)*q5)*qh5 //psi one od2lt
++ eta*0.5*(a + c*alpha*alpha)*q5*qh5 //psi two
+- eta*b*0.5*((q04 + q06))*q5*qh5 //psi three od2lt
+)
++int3d(Th) (
+	- (1.0/dt)*q05*qh5
+	+ 0.5*l1*(dx(q05)*dx(qh5) + dy(q05)*dy(qh5) + dz(q05)*dz(qh5))
+	+ 0.25*l2*(dx(q2l) + dy(q4l) + dz(q5l))*dz(qh5)
+	+ 0.25*l2*(dx(q02) + dy(q04) + dz(q05))*dz(qh5)
+	+ 0.25*l2*(dx(q3l) + dy(q5l) + dz(q6l))*dy(qh5)
+	+ 0.25*l2*(dx(q03) + dy(q05) + dz(q06))*dy(qh5)
+	+ 0.25*l3*(dz(q2l) + dz(q4l) + dz(q5l))*(dx(qh5) + dy(qh5) + dz(qh5))
+	+ 0.25*l3*(dz(q02) + dz(q04) + dz(q05))*(dx(qh5) + dy(qh5) + dz(qh5))
+	+ 0.25*l3*(dy(q3l) + dy(q5l) + dy(q6l))*(dx(qh5) + dy(qh5) + dz(qh5))
+	+ 0.25*l3*(dy(q03) + dy(q05) + dy(q06))*(dx(qh5) + dy(qh5) + dz(qh5))
+	- 0.25*l1*4.0*parameterq0*(dx(q6l) - dz(q3l) + dy(q2l) - dx(q4l))*qh5
+	- 0.25*l1*4.0*parameterq0*(dx(q06) - dz(q03) + dy(q02) - dx(q04))*qh5
+	+ eta*c*(gradPsiOne(q01,q02,q03,q04,q05,q06)*q05)*qh5 //psi one
+	+ eta*c*0.5*( 4.*q01*q05*(q1 - q01)
+						+ 8.*q02*q05*(q2 - q02)
+						+ 8.*q03*q05*(q3 - q03)
+						+ 4.*q04*q05*(q4 - q04)
+						- (gradPsiOne(q01,q02,q03,q04,q05,q06) + 4.*q05^2.)*q05)*qh5 //psi one od2lt
+	+ eta*0.5*(a + c*alpha*alpha)*q05*qh5 //psi two
+	- eta*b*(q02*q03 + q04*q05 + q05*q06)*qh5 //psi three
+	- eta*b*0.5*( 2.*q03*(q2 - q02)
+						+ 2.*q02*(q3 - q03)
+						+ 2.*q05*(q4 - q04)
+						- (q04 + q06)*q05)*qh5 //psi three od2lt
+					)
++ on(5,6, q5 = 0.0)
+;
+
+problem LG6 ( [q6],[qh6], solver=GMRES )=
+int3d(Th) (
+	(1.0/dt)*q6*qh6
++ l1*0.5*(dx(q6)*dx(qh6) + dy(q6)*dy(qh6) + dz(q6)*dz(qh6))
++ eta*c*0.5*((gradPsiOne(q01,q02,q03,q04,q05,q06) + 2.*q06^2.)*q6)*qh6 //psi one od2lt
++ eta*0.5*(a + c*alpha*alpha)*q6*qh6 //psi two
+- eta*b*0.5*(2.*(q06))*q6*qh6 //psi three od2lt
++ eta*b*(1./3.)*0.5*(6.*q06)*q6*qh6 //trace part od2lt
+)
++int3d(Th) (
+	- (1.0/dt)*q06*qh6
+	+ 0.5*l1*(dx(q06)*dx(qh6) + dy(q06)*dy(qh6) + dz(q06)*dz(qh6))
+	+ 0.5*l2*(dx(q3l) + dy(q5l) + dz(q6l))*dz(qh6)
+	+ 0.5*l2*(dx(q03) + dy(q05) + dz(q06))*dz(qh6)
+	+ 0.5*l3*(dz(q3l) + dz(q5l) + dz(q6l))*(dx(qh6) + dy(qh6) + dz(qh6))
+	+ 0.5*l3*(dz(q03) + dz(q05) + dz(q06))*(dx(qh6) + dy(qh6) + dz(qh6))
+	- 0.5*l1*4.0*parameterq0*(dy(q3l) - dx(q5l))*qh6
+	- 0.5*l1*4.0*parameterq0*(dy(q03) - dx(q05))*qh6
+	+ eta*c*(gradPsiOne(q01,q02,q03,q04,q05,q06)*q06 )*qh6 //psi one
+	+ eta*c*0.5*( 4.*q01*q06*(q1 - q01)
+						+ 8.*q02*q06*(q2 - q02)
+						+ 8.*q03*q06*(q3 - q03)
+						+ 4.*q04*q06*(q4 - q04)
+						+ 8.*q05*q06*(q5 - q05)
+						- (gradPsiOne(q01,q02,q03,q04,q05,q06) + 2.*q06^2.)*q06)*qh6 //psi one od2lt
+	+ eta*0.5*(a + c*alpha*alpha)*q06*qh6 //psi two
+	- eta*b*(q03*q03 + q05*q05 + q06*q06)*qh6 //psi three
+	- eta*b*0.5*( 4.*q03*(q3 - q03)
+						+ 4.*q05*(q5 - q05)
+						- 2.*(q06)*q06)*qh6 //psi three od2lt
+	+ eta*b*(1./3.)*traceQ2(q01,q02,q03,q04,q05,q06)*qh6 //trace part
+	+ eta*b*(1./3.)*0.5*( 2.*q01*(q1 - q01)
+										+ 8.*q02*(q2 - q02)
+										+ 8.*q03*(q3 - q03)
+										+ 4.*q04*(q4 - q04)
+										+ 12.*q05*(q5 - q05)
+										- 6.*q06)*q06*qh6 //trace part od2lt
+					)
++ on(5, q6 = (1.0 - dbb) - 1./3.)
++ on(6, q6 = cos(pi/8.0)^2. - 1./3.)
+;
+
+// Boundary conditions - Patterned Homeotropic-Planar
+func real dboundary(real xxx, real yyy){
+	real h=1.5, p=1.5, hp=h+p;
+	real xx = (yyy + xxx)/hp - floor((yyy + xxx)/hp);
+	if (xx < 0.25){
+		return 0.0;
+	}
+	if (xx >= 0.25 && xx < 0.75){
+		return 1.0;
+	}
+	if (xx >= 0.75){
+		return 0.0;
+	}
+}
+
+dbb = dboundary(x,y);
+
+//-----------------------------------------------------------------------------------------
+// Set the Initial Condition
+// Bouligan Structure
+func real turnStep(real zzz){ //tau(z)
+	if (zzz < 1.0){
+		return 1.0;
+	}
+	else if (zzz >= 1.0){
+		return 0.0;
+	}
+}
+func real periodFunc1(real xxx, real yyy){
+	if (yyy - xxx < 0.0){
+		return yyy;
+	}
+	else if (yyy - xxx >= 0.0){
+		return xxx;
+	}
+}
+func real periodFunc2(real xxx, real yyy){
+	if (yyy - xxx < 0.0){
+		return xxx;
+	}
+	else if (yyy - xxx >= 0.0){
+		return yyy;
+	}
+}
+
+Xh w1b, w2b, w3b, normW;
+Xh zTurn;
+zTurn = turnStep(z);
+w1b = sin(4.0*pi*((1.0 - zTurn)*periodFunc1(x,y)+zTurn*periodFunc2(x,y))/6.0); 
+w2b = sin(4.0*pi*((1.0 - zTurn)*periodFunc1(x,y)+zTurn*periodFunc2(x,y))/6.0);
+w3b = cos(4.0*pi*((1.0 - zTurn)*periodFunc1(x,y)+zTurn*periodFunc2(x,y))/6.0);
+normW = w1b*w1b + w2b*w2b + w3b*w3b;
+q01 = 0.7*(w1b*w1b - normW*1./3.);
+q02 = 0.7*(w1b*w2b);
+q03 = 0.7*(w1b*w3b);
+q04 = 0.7*(w2b*w2b - normW*1./3.);
+q05 = 0.7*(w2b*w3b);
+q06 = 0.7*(w3b*w3b - normW*1./3.);
+
+//Save Initial Q
+{
+ofstream gnu(foldername+"/q1_" + 0 + ".gp");
+gnu <<q01[]<<endl;
+}
+
+{
+ofstream gnu(foldername+"/q2_" + 0 + ".gp");
+gnu <<q02[]<<endl;
+}
+
+{
+ofstream gnu(foldername+"/q3_" + 0 + ".gp");
+gnu <<q03[]<<endl;
+}
+
+{
+ofstream gnu(foldername+"/q4_" + 0 + ".gp");
+gnu <<q04[]<<endl;
+}
+
+{
+ofstream gnu(foldername+"/q5_" + 0 + ".gp");
+gnu <<q05[]<<endl;
+}
+
+{
+ofstream gnu(foldername+"/q6_" + 0 + ".gp");
+gnu <<q06[]<<endl;
+}
+
+//-----------------------------------------------------------------------------------------
+//ENERGY DATA
+//-----------------------------------------------------------------------------------------
+energyPsi = eta*int3d(Th)( (  0.5*a*traceQ2(q01,q02,q03,q04,q05,q06)
+					- (1./3.)*b*traceQ3(q01,q02,q03,q04,q05,q06)
+					+ 0.25*c*(traceQ2(q01,q02,q03,q04,q05,q06))^2. ) );
+
+energyl1 = 0.5*l1*int3d(Th)(	dx(q01)*dx(q01) + dy(q01)*dy(q01) + dz(q01)*dz(q01)
+					+ 2.0*(dx(q02)*dx(q02) + dy(q02)*dy(q02) + dz(q02)*dz(q02))
+					+ 2.0*(dx(q03)*dx(q03) + dy(q03)*dy(q03) + dz(q03)*dz(q03))
+					+      dx(q04)*dx(q04) + dy(q04)*dy(q04) + dz(q04)*dz(q04)
+					+ 2.0*(dx(q05)*dx(q05) + dy(q05)*dy(q05) + dz(q05)*dz(q05))
+					+      dx(q06)*dx(q06) + dy(q06)*dy(q06) + dz(q06)*dz(q06));
+energyq0 = 0.5*l1*4.0*parameterq0*int3d(Th)(
+	  (dy(q03) - dz(q02))*q01
+	+ (dy(q05) - dz(q04))*q02
+	+ (dy(q06) - dz(q05))*q03
+	+ (dz(q01) - dx(q03))*q02
+	+ (dz(q02) - dx(q05))*q04
+	+ (dz(q03) - dx(q06))*q05
+	+ (dx(q02) - dy(q01))*q03
+	+ (dx(q04) - dy(q02))*q05
+	+ (dx(q05) - dy(q03))*q06
+	);
+
+energyl2 = 0.5*l2*int3d(Th)(
+	  (dx(q01) + dy(q02) + dz(q03))*(dx(q01) + dy(q02) + dz(q03))
+	+ (dx(q02) + dy(q04) + dz(q05))*(dx(q02) + dy(q04) + dz(q05))
+	+ (dx(q03) + dy(q05) + dz(q06))*(dx(q03) + dy(q05) + dz(q06))
+);
+energyl3 = 0.5*l3*int3d(Th)(
+	  (dx(q01)*dx(q01) + dx(q02)*dy(q01) + dx(q03)*dz(q01))
+	+ (dy(q01)*dx(q02) + dy(q02)*dy(q02) + dy(q03)*dz(q02))
+	+ (dz(q01)*dx(q03) + dz(q02)*dy(q03) + dy(q03)*dz(q03))
+	+ (dx(q02)*dx(q02) + dx(q04)*dy(q02) + dx(q05)*dz(q02))
+	+ (dy(q02)*dx(q04) + dy(q04)*dy(q04) + dy(q05)*dz(q04))
+	+ (dz(q02)*dx(q05) + dz(q04)*dy(q05) + dy(q05)*dz(q05))
+	+ (dx(q03)*dx(q03) + dx(q05)*dy(q03) + dx(q06)*dz(q03))
+	+ (dy(q03)*dx(q05) + dy(q05)*dy(q05) + dy(q06)*dz(q05))
+	+ (dz(q03)*dx(q06) + dz(q05)*dy(q06) + dy(q06)*dz(q06))
+);
+
+
+energy = energyPsi + energyl1 + energyq0 + energyl2 + energyl3;
+
+cout << "Time = " << time << " E = " << energy << " Ed1 = " << energyl1 << " Ed2 = " << energyq0 << " Eb = " << energyPsi << endl;
+
+{
+ofstream f(filename,append);
+f.scientific << "energy(" << 1 << "," << 1 << ")=" << energy << ";\n";
+f.scientific << "energyl1(" << 1 << "," << 1 << ")=" << energyl1 << ";\n";
+f.scientific << "energyq0(" << 1 << "," << 1 << ")=" << energyq0 << ";\n";
+f.scientific << "energyl2(" << 1 << "," << 1 << ")=" << energyl2 << ";\n";
+f.scientific << "energyl3(" << 1 << "," << 1 << ")=" << energyl3 << ";\n";
+f.scientific << "energyPsi(" << 1 << "," << 1 << ")=" << energyPsi << ";\n";
+f.scientific << "time(" << 1 << "," << 1 << ")=" << time << ";\n";
+};
+
+//-----------------------------------------------------------------------------------------
+// Run the Main Routine
+//-----------------------------------------------------------------------------------------
+real cpu = clock();
+for (i=1;i<=nTimestep;i++){
+time = time + dt;
+
+error=1.0;
+q1l = q01;
+q2l = q02;
+q3l = q03;
+q4l = q04;
+q5l = q05;
+q6l = q06;
+iter = 0;
+while (error >= Tol & iter <= 30){ //Iterative Algorithm
+
+LG1;
+LG2;
+LG3;
+LG4;
+LG5;
+LG6;
+
+errorq1 = sqrt(int2d(Th)(q1 - q1l)^2.0)/sqrt(int2d(Th)(q1^2.0));
+errorq2 = sqrt(int2d(Th)(q2 - q2l)^2.0)/sqrt(int2d(Th)(q2^2.0));
+errorq3 = sqrt(int2d(Th)(q3 - q3l)^2.0)/sqrt(int2d(Th)(q3^2.0));
+errorq4 = sqrt(int2d(Th)(q4 - q4l)^2.0)/sqrt(int2d(Th)(q4^2.0));
+errorq5 = sqrt(int2d(Th)(q5 - q5l)^2.0)/sqrt(int2d(Th)(q5^2.0));
+errorq6 = sqrt(int2d(Th)(q6 - q6l)^2.0)/sqrt(int2d(Th)(q6^2.0));
+
+error = errorq1 + errorq2 + errorq3 + errorq4 + errorq5 + errorq6;
+cout << "E= " << error << " E1= " << errorq1 << " E2= " << errorq2 << " E3= " << errorq3 << " E4= " << errorq4 << " E5= " << errorq5 << " E6= " << errorq6 << endl;
+q1l = q1;
+q2l = q2;
+q3l = q3;
+q4l = q4;
+q5l = q5;
+q6l = q6;
+iter++;
+Nsystem++;
+}
+
+//Compute the energy of the system
+energyPsi = eta*int3d(Th)( (  0.5*a*traceQ2(q1,q2,q3,q4,q5,q6)
+									- (1./3.)*b*traceQ3(q1,q2,q3,q4,q5,q6)
+									+ 0.25*c*(traceQ2(q1,q2,q3,q4,q5,q6))^2. ) );
+
+energyl1 = 0.5*l1*int3d(Th)(dx(q1)*dx(q1) + dy(q1)*dy(q1) + dz(q1)*dz(q1)
+				+ 2.0*(dx(q2)*dx(q2) + dy(q2)*dy(q2) + dz(q2)*dz(q2))
+				+ 2.0*(dx(q3)*dx(q3) + dy(q3)*dy(q3) + dz(q3)*dz(q3))
+				+      dx(q4)*dx(q4) + dy(q4)*dy(q4) + dz(q4)*dz(q4)
+				+ 2.0*(dx(q5)*dx(q5) + dy(q5)*dy(q5) + dz(q5)*dz(q5))
+				+      dx(q6)*dx(q6) + dy(q6)*dy(q6) + dz(q6)*dz(q6));
+energyq0 = 0.5*l1*4.0*parameterq0*int3d(Th)(
+	  (dy(q3) - dz(q2))*q1
+	+ (dy(q5) - dz(q4))*q2
+	+ (dy(q6) - dz(q5))*q3
+	+ (dz(q1) - dx(q3))*q2
+	+ (dz(q2) - dx(q5))*q4
+	+ (dz(q3) - dx(q6))*q5
+	+ (dx(q2) - dy(q1))*q3
+	+ (dx(q4) - dy(q2))*q5
+	+ (dx(q5) - dy(q3))*q6
+	);
+
+energyl2 = 0.5*l2*int3d(Th)(
+	  (dx(q1) + dy(q2) + dz(q3))*(dx(q1) + dy(q2) + dz(q3))
+	+ (dx(q2) + dy(q4) + dz(q5))*(dx(q2) + dy(q4) + dz(q5))
+	+ (dx(q3) + dy(q5) + dz(q6))*(dx(q3) + dy(q5) + dz(q6))
+);
+energyl3 = 0.5*l3*int3d(Th)(
+	  (dx(q1)*dx(q1) + dx(q2)*dy(q1) + dx(q3)*dz(q1))
+	+ (dy(q1)*dx(q2) + dy(q2)*dy(q2) + dy(q3)*dz(q2))
+	+ (dz(q1)*dx(q3) + dz(q2)*dy(q3) + dy(q3)*dz(q3))
+	+ (dx(q2)*dx(q2) + dx(q4)*dy(q2) + dx(q5)*dz(q2))
+	+ (dy(q2)*dx(q4) + dy(q4)*dy(q4) + dy(q5)*dz(q4))
+	+ (dz(q2)*dx(q5) + dz(q4)*dy(q5) + dy(q5)*dz(q5))
+	+ (dx(q3)*dx(q3) + dx(q5)*dy(q3) + dx(q6)*dz(q3))
+	+ (dy(q3)*dx(q5) + dy(q5)*dy(q5) + dy(q6)*dz(q5))
+	+ (dz(q3)*dx(q6) + dz(q5)*dy(q6) + dy(q6)*dz(q6))
+);
+
+energy = energyPsi + energyl1 + energyl2 + energyl3 + energyq0;
+
+// update for next iteration
+q01 = q1;
+q02 = q2;
+q03 = q3;
+q04 = q4;
+q05 = q5;
+q06 = q6;
+
+trace = int3d(Th)(q1 + q4 + q6);
+
+cout << "Time = " << time << " E = " << energy << " traceQ = " << trace << endl;
+cout << "	Epsi = " << energyPsi << endl;
+cout << "	El1 = " << energyl1 << " El2 = " << energyl2 << " El3 = " << energyl3 << " Eq0 = " << energyq0 << endl;
+if (abs(iterdib-i)<1e-5) //Saving data for ParaView
+{
+	{
+	ofstream gnu(foldername+"/q1_" + i + ".gp");
+	gnu <<q1[]<<endl;
+	}
+
+	{
+	ofstream gnu(foldername+"/q2_" + i + ".gp");
+	gnu <<q2[]<<endl;
+	}
+
+	{
+	ofstream gnu(foldername+"/q3_" + i + ".gp");
+	gnu <<q3[]<<endl;
+	}
+
+	{
+	ofstream gnu(foldername+"/q4_" + i + ".gp");
+	gnu <<q4[]<<endl;
+	}
+
+	{
+	ofstream gnu(foldername+"/q5_" + i + ".gp");
+	gnu <<q5[]<<endl;
+	}
+
+	{
+	ofstream gnu(foldername+"/q6_" + i + ".gp");
+	gnu <<q6[]<<endl;
+	}
+		iterdib=iterdib+iterguarda;
+}
+
+
+//-----------------------------------------------------------------------------------------
+//ENERGY DATA IN MATLAB FORMAT--adding information
+//-----------------------------------------------------------------------------------------
+		{
+		ofstream f(filename,append);
+		f.scientific << "energy(" << 1 << "," << i+1 << ")=" << energy << ";\n";
+		f.scientific << "energyl1(" << 1 << "," << i+1 << ")=" << energyl1 << ";\n";
+		f.scientific << "energyq0(" << 1 << "," << i+1 << ")=" << energyq0 << ";\n";
+		f.scientific << "energyl2(" << 1 << "," << i+1 << ")=" << energyl2 << ";\n";
+		f.scientific << "energyl3(" << 1 << "," << i+1 << ")=" << energyl3 << ";\n";
+		f.scientific << "energyPsi(" << 1 << "," << i+1 << ")=" << energyPsi << ";\n";
+		f.scientific << "time(" << 1 << "," << i+1 << ")=" << time << ";\n";
+		};
+
+}
+
+//-----------------------------------------------------------------------------------------
+// END OF the Main Routine
+//-----------------------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------------------
+// SAVING FINAL DATA
+//-----------------------------------------------------------------------------------------
+{
+ofstream gnu(foldername+"/q1_" + nTimestep + ".gp");
+gnu <<q1[]<<endl;
+}
+
+{
+ofstream gnu(foldername+"/q2_" + nTimestep + ".gp");
+gnu <<q2[]<<endl;
+}
+
+{
+ofstream gnu(foldername+"/q3_" + nTimestep + ".gp");
+gnu <<q3[]<<endl;
+}
+
+{
+ofstream gnu(foldername+"/q4_" + nTimestep + ".gp");
+gnu <<q4[]<<endl;
+}
+
+{
+ofstream gnu(foldername+"/q5_" + nTimestep + ".gp");
+gnu <<q5[]<<endl;
+}
+
+{
+ofstream gnu(foldername+"/q6_" + nTimestep + ".gp");
+gnu <<q6[]<<endl;
+}
