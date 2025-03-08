@@ -14,7 +14,7 @@ real wdate=1;
 string foldername = "data";
 
 int start = 1;
-int step = 20;
+int step = 5;
 
 // 1 unit = 100nm or 0.1um
 real x0 = -1.0, x1 = 1.0;
