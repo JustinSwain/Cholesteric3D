@@ -3,8 +3,8 @@
 // Licensed under the MIT License (see LICENSE file)
 // 
 //  This code supports the research in "Directed Self-Assembly of Chiral Liquid Crystals into Biomimetic 
-//  Bouligand Structures in Thin Film with Superior Optical-Mechanical Properties" by Tejal Pawale1, Justin Swain, 
-//  Mesonma Anwasi1, David A. Czaplewski, Ralu Nana Silvia Divan, Giordano Tierra Chica, and Xiao Li
+//  Bouligand Structures in Thin Film with Superior Optical-Mechanical Properties" by Tejal Pawale, Justin Swain, 
+//  Mesonma Anwasi, David A. Czaplewski, Ralu Nana Silvia Divan, Giordano Tierra Chica, and Xiao Li
 
 load "iovtk"; // for saving data in paraview format
 load "msh3"
