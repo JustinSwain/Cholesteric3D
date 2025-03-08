@@ -16,7 +16,6 @@
 <p>Optional</p>
 <ul>
   <li>data - a few sample data files</li>
-  <li>energyData.m - sample energy data</li>
 </ul>
 
 <h2>Hardware Requirements:</h2>
