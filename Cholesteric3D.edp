@@ -4,7 +4,8 @@
 // 
 //  This code supports the research in "Directed Self-Assembly of Chiral Liquid Crystals into Biomimetic 
 //  Bouligand Structures in Thin Film with Superior Optical-Mechanical Properties" by Tejal Pawale, Justin Swain, 
-//  Mesonma Anwasi, David A. Czaplewski, Ralu Nana Silvia Divan, Giordano Tierra Chica, and Xiao Li
+//  Mesonma Anwasi, Sachin Kaluarachchi, Yuheng Wang, Yong Yang, David A. Czaplewski, Ralu Nana Silvia Divan, 
+//  Giordano Tierra and Xiao Li
 
 load "iovtk"; // for saving data in paraview format
 load "msh3"
@@ -618,3 +619,4 @@ gnu <<q5[]<<endl;
 ofstream gnu(foldername+"/q6_" + nTimestep + ".gp");
 gnu <<q6[]<<endl;
 }
+
