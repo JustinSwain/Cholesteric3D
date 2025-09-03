@@ -1,10 +1,10 @@
 <h1>Cholesteric 3D</h1>
 
 <p>
-  This software is used to simulate choelsteric liquid crystals in three dimensions using a Q-tensor model by way of a Finite Element method. The Finite Element problem is solved using FreeFEM++. Data is processed using MATLAB and Python. Data is visualized using ParaView.
+  This software is used to simulate cholesteric liquid crystals in three dimensions using a Q-tensor model by way of a Finite Element method. The Finite Element problem is solved using FreeFEM++. Data is processed using MATLAB and Python. Data is visualized using ParaView.
 </p>
 <p>
-  This code accompanies the paper "Directed Self-Assembly of Chiral Liquid Crystals into Biomimetic Bouligand Structures in Thin Film with Superior Optical-Mechanical Properties" by Tejal Pawale, Justin Swain, Mesonma Anwasi, David A. Czaplewski, Ralu Nana Silvia Divan, Giordano Tierra Chica, and Xiao Li. This software was developed by Justin Swain and Giordano Tierra Chica and released as open source under the MIT license.
+  This code accompanies the paper "Directed Self-Assembly of Chiral Liquid Crystals into Biomimetic Bouligand Structures in Thin Film with Superior Optical-Mechanical Properties" by Tejal Pawale, Justin Swain, Mesonma Anwasi, Sachin Kaluarachchi, Yuheng Wang, Yong Yang, David A. Czaplewski, Ralu Nana Silvia Divan, Giordano Tierra and Xiao Li. This software was developed by Justin Swain and Giordano Tierra Chica and released as open source under the MIT license.
 </p>
 
 <h2>Repository Contents</h2>
